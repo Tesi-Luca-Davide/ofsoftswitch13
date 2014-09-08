@@ -255,6 +255,7 @@ ofl_actions_pack(struct ofl_action_header *src, struct ofp_action_header *dst, u
             da->len = htons(sizeof(struct ofp_action_set_state));
             da->state = htonl(sa->state);
             da->stage_id = sa->stage_id;
+            da->bw_flag = sa->bw_flag;
 
             return sizeof(struct ofp_action_set_state);
         }

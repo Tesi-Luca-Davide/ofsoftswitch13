@@ -600,7 +600,8 @@ struct ofp_action_set_state {
     uint16_t len;  /* Length is 8. */
     uint32_t state; /* State instance. */
     uint8_t stage_id; /*Stage destination*/
-    uint8_t pad[7];           /* Align to 64-bits. */
+    uint8_t bw_flag; /* Backwarding flag*/
+    uint8_t pad[6];           /* Align to 64-bits. */
     //uint64_t state;
     //uint8_t pad[3];           /* Align to 64-bits. */
 };

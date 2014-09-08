@@ -112,6 +112,7 @@ struct ofl_action_set_state {
     struct ofl_action_header   header; /* OFPAT_SET_STATE */
     uint32_t state;
     uint8_t stage_id; /*we have 64 flow table in the pipeline*/
+    uint8_t bw_flag;
     //uint64_t state;
 };
 

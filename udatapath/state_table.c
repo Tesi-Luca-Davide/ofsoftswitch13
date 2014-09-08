@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-void __extract_key(uint8_t *, struct key_extractor *, struct packet *);
+void __extract_key(uint8_t *, struct key_extractor *, struct packet *, uint8_t bw_flag);
 
 struct state_table * state_table_create(void) {
     struct state_table *table = malloc(sizeof(struct state_table));
@@ -24,12 +24,53 @@ void state_table_destroy(struct state_table *table) {
     free(table);
 }
 /* having the key extractor field goes to look for these key inside the packet and map to corresponding value and copy the value into buf. */ 
-void __extract_key(uint8_t *buf, struct key_extractor *extractor, struct packet *pkt) {
+void __extract_key(uint8_t *buf, struct key_extractor *extractor, struct packet *pkt, uint8_t bw_flag) {
 	int i, l=0;
     struct ofl_match_tlv *f;
 
 	for (i=0; i<extractor->field_count; i++) {
 		uint32_t type = (int)extractor->fields[i];
+		if (bw_flag) {
+			switch(type){
+				case OXM_OF_ETH_DST:
+						type = OXM_OF_ETH_SRC; break;
+				case OXM_OF_ETH_SRC:
+						type = OXM_OF_ETH_DST; break;
+				case OXM_OF_IPV4_DST:
+						type = OXM_OF_IPV4_SRC; break;
+				case OXM_OF_IPV4_SRC:
+						type = OXM_OF_IPV4_DST; break;
+				case OXM_OF_IPV6_DST:
+						type = OXM_OF_IPV6_SRC; break;
+				case OXM_OF_IPV6_SRC:
+						type = OXM_OF_IPV6_DST; break;
+				case OXM_OF_TCP_DST:
+						type = OXM_OF_TCP_SRC; break;
+				case OXM_OF_TCP_SRC:
+						type = OXM_OF_TCP_DST; break;
+				case OXM_OF_UDP_DST:
+						type = OXM_OF_UDP_SRC; break;
+				case OXM_OF_UDP_SRC:
+						type = OXM_OF_UDP_DST; break;
+				case OXM_OF_SCTP_DST:
+						type = OXM_OF_SCTP_SRC; break;
+				case OXM_OF_SCTP_SRC:
+						type = OXM_OF_SCTP_DST; break;
+				case OXM_OF_ARP_SPA:
+						type = OXM_OF_ARP_TPA; break;
+				case OXM_OF_ARP_TPA:
+						type = OXM_OF_ARP_SPA; break;
+				case OXM_OF_ARP_SHA:
+						type = OXM_OF_ARP_THA; break;
+				case OXM_OF_ARP_THA:
+						type = OXM_OF_ARP_SHA; break;
+				case OXM_OF_IPV6_ND_SLL:
+						type = OXM_OF_IPV6_ND_TLL; break;
+				case OXM_OF_IPV6_ND_TLL:
+						type = OXM_OF_IPV6_ND_SLL; break;
+			}
+
+		}
 		HMAP_FOR_EACH_WITH_HASH(f, struct ofl_match_tlv,
         	hmap_node, hash_int(type, 0), &pkt->handle_std->match.match_fields){
 				if (type == f->header) {
@@ -45,7 +86,7 @@ struct state_entry * state_table_lookup(struct state_table* table, struct packet
 	struct state_entry * e = NULL;	
 	uint8_t key[MAX_STATE_KEY_LEN] = {0};
 
-    __extract_key(key, &table->read_key, pkt);                    
+    __extract_key(key, &table->read_key, pkt, 0);                    
 
 	HMAP_FOR_EACH_WITH_HASH(e, struct state_entry, 
 		hmap_node, hash_bytes(key, MAX_STATE_KEY_LEN, 0), &table->state_entries){
@@ -100,15 +141,16 @@ void state_table_set_extractor(struct state_table *table, struct key_extractor *
 	dest->field_count = ke->field_count;
 
 	memcpy(dest->fields, ke->fields, 4*ke->field_count);
+
 	return;
 }
 
-void state_table_set_state(struct state_table *table, struct packet *pkt, uint32_t state, uint8_t *k, uint32_t len) {
+void state_table_set_state(struct state_table *table, struct packet *pkt, uint32_t state, uint8_t bw_flag, uint8_t *k, uint32_t len) {
 	uint8_t key[MAX_STATE_KEY_LEN] = {0};	
 	struct state_entry *e;
 
 	if (pkt){
-		__extract_key(key, &table->write_key, pkt);
+		__extract_key(key, &table->write_key, pkt, bw_flag);
                                         int h;
                                         printf("ethernet address for write key is:");
                                         for (h=0;h<6;h++){
