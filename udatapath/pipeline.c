@@ -161,7 +161,6 @@ pipeline_create(struct datapath *dp) {
     struct pipeline *pl;
     int i;
 
-    printf("here is the create pipeline %02x \n",OXM_OF_ETH_SRC);
     pl = xmalloc(sizeof(struct pipeline));
     for (i=0; i<PIPELINE_TABLES; i++) {
         pl->tables[i] = flow_table_create(dp, i);
@@ -176,7 +175,6 @@ pipeline_create(struct datapath *dp) {
 static bool
 is_table_miss(struct flow_entry *entry){
 
-    //printf("here is table miss\n");
     return ((entry->stats->priority) == 0 && (entry->match->length <= 4));
 
 }
@@ -256,15 +254,18 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt) {
 		if (table->features->config &OFPTC_TABLE_STATEFUL) {
 			
 			state_entry = state_table_lookup(table->state_table, pkt);
-			state_table_write_metadata(state_entry, pkt);
+			state_table_write_state(state_entry, pkt);
 		}
+        
+        if (DP_SUPPORTED_CAPABILITIES & OFPC_OPENSTATE){
+            pipeline_global_states_write_flags(pkt);
+        }
 
     		//printf("after statetable entry\n");
 		// EEDBEH: additional printout to debug table lookup
 		if (VLOG_IS_DBG_ENABLED(LOG_MODULE)) {
 			char *m = ofl_structs_match_to_string((struct ofl_match_header*)&(pkt->handle_std->match), pkt->dp->exp);
-			VLOG_DBG_RL(LOG_MODULE, &rl, "searching table entry for packet match: %s.", m);
-			printf("searching table entry for pkt match\n");
+			VLOG_DBG_RL(LOG_MODULE, &rl, "searching table entry in table %d for packet match: %s.", table->stats->table_id,m);
 			free(m);
 		}
 
@@ -275,7 +276,6 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt) {
                 char *m = ofl_structs_flow_stats_to_string(entry->stats, pkt->dp->exp);
                 VLOG_DBG_RL(LOG_MODULE, &rl, "found matching entry: %s.", m);
                 free(m);
-		printf("find matching entry\n");
             } 
 
             pkt->handle_std->table_miss = is_table_miss(entry);
@@ -297,7 +297,6 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt) {
 			/* OpenFlow 1.3 default behavior on a table miss */
 			VLOG_DBG_RL(LOG_MODULE, &rl, "No matching entry found. Dropping packet.");
 			packet_destroy(pkt);
-			printf("No matching entry found. Dropping packet.\n");
 			return;
         }
     }
@@ -306,7 +305,6 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt) {
 
 static
 int inst_compare(const void *inst1, const void *inst2){
-    printf("here is comparing priority instructions\n");
     struct ofl_instruction_header * i1 = *(struct ofl_instruction_header **) inst1;
     struct ofl_instruction_header * i2 = *(struct ofl_instruction_header **) inst2;
     if ((i1->type == OFPIT_APPLY_ACTIONS && i2->type == OFPIT_CLEAR_ACTIONS) ||
@@ -317,9 +315,26 @@ int inst_compare(const void *inst1, const void *inst2){
 }
 
 ofl_err
+pipeline_handle_flag_mod(struct pipeline *pl, struct ofl_msg_flag_mod *msg,
+                                                const struct sender *sender) {
+    
+    uint32_t global_states = pl->dp->global_states;
+    ofl_err error;
+    if (msg->command == OFPSC_MODIFY_FLAGS) {
+        global_states = (global_states & ~(msg->flag_mask)) | (msg->flag & msg->flag_mask);
+        pl->dp->global_states = global_states;       
+    }
+    else if (msg->command == OFPSC_RESET_FLAGS) {
+        pl->dp->global_states = OFP_GLOBAL_STATES_DEFAULT;
+    }
+    else
+        return 1;
+    return 0;
+}
+
+ofl_err
 pipeline_handle_state_mod(struct pipeline *pl, struct ofl_msg_state_mod *msg,
                                                 const struct sender *sender) {
-    printf("here is handle state mod func\n");
     ofl_err error;
 	struct state_table *st = pl->tables[msg->table_id]->state_table;
 //	int update;
@@ -333,7 +348,6 @@ pipeline_handle_state_mod(struct pipeline *pl, struct ofl_msg_state_mod *msg,
 	}
 	else if (msg->command == OFPSC_ADD_FLOW_STATE) {
 		struct ofl_msg_state_entry *p = (struct ofl_msg_state_entry *) msg->payload;
-		
 		state_table_set_state(st, NULL, p->state, 0, p->key, p->key_len);
 	}
 	else if (msg->command == OFPSC_DEL_FLOW_STATE) {
@@ -349,7 +363,6 @@ pipeline_handle_state_mod(struct pipeline *pl, struct ofl_msg_state_mod *msg,
 ofl_err
 pipeline_handle_flow_mod(struct pipeline *pl, struct ofl_msg_flow_mod *msg,
                                                 const struct sender *sender) {
-    printf("here is handle flow mod func\n");
     /* Note: the result of using table_id = 0xff is undefined in the spec.
      *       for now it is accepted for delete commands, meaning to delete
      *       from all tables */
@@ -382,6 +395,10 @@ pipeline_handle_flow_mod(struct pipeline *pl, struct ofl_msg_flow_mod *msg,
                 return error;
             }
         }
+	/* Reject goto in the last table. */
+	if ((msg->table_id == (PIPELINE_TABLES - 1))
+	    && (msg->instructions[i]->type == OFPIT_GOTO_TABLE))
+	  return ofl_error(OFPET_BAD_INSTRUCTION, OFPBIC_UNSUP_INST);
     }
 
     if (msg->table_id == 0xff) {
@@ -433,7 +450,6 @@ pipeline_handle_table_mod(struct pipeline *pl,
                           struct ofl_msg_table_mod *msg,
                           const struct sender *sender) {
 
-    printf("here is handle table mod func\n");
     if(sender->remote->role == OFPCR_ROLE_SLAVE)
         return ofl_error(OFPET_BAD_REQUEST, OFPBRC_IS_SLAVE);
 
@@ -456,7 +472,6 @@ pipeline_handle_stats_request_flow(struct pipeline *pl,
                                    struct ofl_msg_multipart_request_flow *msg,
                                    const struct sender *sender) {
 
-    printf("here is handle statistic request flow\n");
     struct ofl_flow_stats **stats = xmalloc(sizeof(struct ofl_flow_stats *));
     size_t stats_size = 1;
     size_t stats_num = 0;
@@ -490,7 +505,6 @@ ofl_err
 pipeline_handle_stats_request_table(struct pipeline *pl,
                                     struct ofl_msg_multipart_request_header *msg UNUSED,
                                     const struct sender *sender) {
-    printf("here is handle statistic request table\n");
     struct ofl_table_stats **stats;
     size_t i;
 
@@ -519,35 +533,142 @@ ofl_err
 pipeline_handle_stats_request_table_features_request(struct pipeline *pl,
                                     struct ofl_msg_multipart_request_header *msg,
                                     const struct sender *sender) {
-    printf("here is handle statistic request table feature\n");
     size_t i, j;
     struct ofl_table_features **features;
     struct ofl_msg_multipart_request_table_features *feat =
                        (struct ofl_msg_multipart_request_table_features *) msg;
 
-    /*Check to see if the body is empty*/
+    /* Further validation of request not done in
+     * ofl_structs_table_features_unpack(). Jean II */
+    if(feat->table_features != NULL) {
+        for(i = 0; i < feat->tables_num; i++){
+	    if(feat->table_features[i]->table_id >= PIPELINE_TABLES)
+	        return ofl_error(OFPET_TABLE_FEATURES_FAILED, OFPTFFC_BAD_TABLE);
+	    /* We may want to validate things like config, max_entries,
+	     * metadata... */
+        }
+    }
+
+    /* Check if we already received fragments of a multipart request. */
+    if(sender->remote->mp_req_msg != NULL) {
+      bool nomore;
+
+      /* We can only merge requests having the same XID. */
+      if(sender->xid != sender->remote->mp_req_xid)
+	{
+	  VLOG_ERR(LOG_MODULE, "multipart request: wrong xid (0x%X != 0x%X)", sender->xid, sender->remote->mp_req_xid);
+
+	  /* Technically, as our buffer can only hold one pending request,
+	   * this is a buffer overflow ! Jean II */
+	  /* Return error. */
+	  return ofl_error(OFPET_BAD_REQUEST, OFPBRC_MULTIPART_BUFFER_OVERFLOW);
+	}
+
+      VLOG_DBG(LOG_MODULE, "multipart request: merging with previous fragments (%zu+%zu)", ((struct ofl_msg_multipart_request_table_features *) sender->remote->mp_req_msg)->tables_num, feat->tables_num);
+
+      /* Merge the request with previous fragments. */
+      nomore = ofl_msg_merge_multipart_request_table_features((struct ofl_msg_multipart_request_table_features *) sender->remote->mp_req_msg, feat);
+
+      /* Check if incomplete. */
+      if(!nomore)
+	return 0;
+
+      VLOG_DBG(LOG_MODULE, "multipart request: reassembly complete (%zu)", ((struct ofl_msg_multipart_request_table_features *) sender->remote->mp_req_msg)->tables_num);
+
+      /* Use the complete request. */
+      feat = (struct ofl_msg_multipart_request_table_features *) sender->remote->mp_req_msg;
+
+#if 0
+      {
+	char *str;
+	str = ofl_msg_to_string((struct ofl_msg_header *) feat, pl->dp->exp);
+	VLOG_DBG(LOG_MODULE, "\nMerged request:\n%s\n\n", str);
+	free(str);
+      }
+#endif
+
+    } else {
+      /* Check if the request is an initial fragment. */
+      if(msg->flags & OFPMPF_REQ_MORE) {
+	struct ofl_msg_multipart_request_table_features* saved_msg;
+
+	VLOG_DBG(LOG_MODULE, "multipart request: create reassembly buffer (%zu)", feat->tables_num);
+
+	/* Create a buffer the do reassembly. */
+	saved_msg = (struct ofl_msg_multipart_request_table_features*) malloc(sizeof(struct ofl_msg_multipart_request_table_features));
+	saved_msg->header.header.type = OFPT_MULTIPART_REQUEST;
+	saved_msg->header.type = OFPMP_TABLE_FEATURES;
+	saved_msg->header.flags = 0;
+	saved_msg->tables_num = 0;
+	saved_msg->table_features = NULL;
+
+	/* Save the fragment for later use. */
+	ofl_msg_merge_multipart_request_table_features(saved_msg, feat);
+	sender->remote->mp_req_msg = (struct ofl_msg_multipart_request_header *) saved_msg;
+	sender->remote->mp_req_xid = sender->xid;
+
+	return 0;
+      }
+
+      /* Non fragmented request. Nothing to do... */
+      VLOG_DBG(LOG_MODULE, "multipart request: non-fragmented request (%zu)", feat->tables_num);
+    }
+
+    /*Check to see if the body is empty.*/
+    /* Should check merge->tables_num instead. Jean II */
     if(feat->table_features != NULL){
+        /* Disable all tables, they will be selectively re-enabled. */
+        for(i = 0; i < PIPELINE_TABLES; i++){
+	    pl->tables[i]->disabled = true;
+	}
         /* Change tables configuration
            TODO: Remove flows*/
+        /* TODO : In theory, tables should be in ascending order !
+	 * Maybe we could return an error if table number not
+	 * expected, like OFPTFFC_BAD_TABLE... Jean II  */
+        VLOG_DBG(LOG_MODULE, "pipeline_handle_stats_request_table_features_request: updating features");
         for(i = 0; i < feat->tables_num; i++){
+	    /* Obvious memory leak.
+	     * Obvious memory ownership issue when non-frag requests.
+	     * Jean II */
             pl->tables[feat->table_features[i]->table_id]->features = feat->table_features[i];
+	    pl->tables[i]->disabled = false;
         }
+    }
+
+    /* Cleanup request. */
+    if(sender->remote->mp_req_msg != NULL) {
+      /* Can't free entire structure, we are pointing to it ! */
+      //ofl_msg_free((struct ofl_msg_header *) sender->remote->mp_req_msg, NULL);
+      free(sender->remote->mp_req_msg);
+      sender->remote->mp_req_msg = NULL;
+      sender->remote->mp_req_xid = 0;  /* Currently not needed. Jean II. */
     }
 
     j = 0;
     /* Query for table capabilities */
     loop: ;
     features = (struct ofl_table_features**) xmalloc(sizeof(struct ofl_table_features *) * 8);
+    /* Return 8 tables per reply segment. */
     for (i = 0; i < 8; i++){
+        /* Skip disabled tables. */
+        while((j < PIPELINE_TABLES) && (pl->tables[j]->disabled == true))
+	    j++;
+	/* Stop at the last table. */
+	if(j >= PIPELINE_TABLES)
+	    break;
+	/* Use that table in the reply. */
         features[i] = pl->tables[j]->features;
         j++;
     }
+    VLOG_DBG(LOG_MODULE, "multipart reply: returning %zu tables, next table-id %zu", i, j);
     {
     struct ofl_msg_multipart_reply_table_features reply =
-        {{{.type = OFPT_MULTIPART_REPLY},
-          .type = OFPMP_TABLE_FEATURES, .flags = j == PIPELINE_TABLES? 0x00000000:OFPMPF_REPLY_MORE},
+         {{{.type = OFPT_MULTIPART_REPLY},
+           .type = OFPMP_TABLE_FEATURES,
+           .flags = (j == PIPELINE_TABLES ? 0x00000000 : OFPMPF_REPLY_MORE) },
           .table_features     = features,
-          .tables_num = 8};
+          .tables_num = i };
           dp_send_message(pl->dp, (struct ofl_msg_header *)&reply, sender);
     }
     if (j < PIPELINE_TABLES){
@@ -561,7 +682,6 @@ ofl_err
 pipeline_handle_stats_request_aggregate(struct pipeline *pl,
                                   struct ofl_msg_multipart_request_flow *msg,
                                   const struct sender *sender) {
-    printf("here is handle statistic request aggregatation\n");
     struct ofl_msg_multipart_reply_aggregate reply =
             {{{.type = OFPT_MULTIPART_REPLY},
               .type = OFPMP_AGGREGATE, .flags = 0x0000},
@@ -594,7 +714,6 @@ pipeline_destroy(struct pipeline *pl) {
     struct flow_table *table;
     int i;
 
-    printf("here is handle destroy pipeline\n");
     for (i=0; i<PIPELINE_TABLES; i++) {
         table = pl->tables[i];
         if (table != NULL) {
@@ -609,7 +728,6 @@ void
 pipeline_timeout(struct pipeline *pl) {
     int i;
 
-    printf("here is handle timeout pipeline\n");
     for (i = 0; i < PIPELINE_TABLES; i++) {
         flow_table_timeout(pl->tables[i]);
     }
@@ -629,7 +747,6 @@ execute_entry(struct pipeline *pl, struct flow_entry *entry,
             Write-Metadata
             Goto-Table
     */
-    printf("here is handle execution of intruction for each flow entry\n");
     size_t i;
     struct ofl_instruction_header *inst;
 
@@ -660,7 +777,7 @@ execute_entry(struct pipeline *pl, struct flow_entry *entry,
                     hmap_node, hash_int(OXM_OF_METADATA,0), &(*pkt)->handle_std->match.match_fields){
                     uint64_t *metadata = (uint64_t*) f->value;
                     *metadata = (*metadata & ~wi->metadata_mask) | (wi->metadata & wi->metadata_mask);
-                    VLOG_DBG_RL(LOG_MODULE, &rl, "Executing write metadata: %llx", *metadata);
+                    VLOG_DBG_RL(LOG_MODULE, &rl, "Executing write metadata: %"PRIx64"", *metadata);
                 }
                 break;
             }
@@ -688,5 +805,16 @@ execute_entry(struct pipeline *pl, struct flow_entry *entry,
                 break;
             }
         }
+    }
+}
+
+
+void pipeline_global_states_write_flags(struct packet *pkt){
+    struct  ofl_match_tlv *f;
+
+    HMAP_FOR_EACH_WITH_HASH(f, struct ofl_match_tlv, 
+        hmap_node, hash_int(OXM_OF_FLAGS,0), &pkt->handle_std->match.match_fields){
+                uint32_t *flags = (uint32_t*) f->value;
+                *flags = (*flags & 0x0) | (pkt->dp->global_states);
     }
 }

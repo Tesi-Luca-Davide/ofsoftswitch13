@@ -69,7 +69,6 @@ handle_control_barrier_request(struct datapath *dp,
 static ofl_err
 handle_control_features_request(struct datapath *dp,
           struct ofl_msg_header *msg, const struct sender *sender) {
-    printf("capabilities:%d \n",DP_SUPPORTED_CAPABILITIES);
     struct ofl_msg_features_reply reply =
             {{.type = OFPT_FEATURES_REPLY},
              .datapath_id  = dp->id,
@@ -322,10 +321,12 @@ handle_control_msg(struct datapath *dp, struct ofl_msg_header *msg,
         case OFPT_FLOW_MOD: {
             return pipeline_handle_flow_mod(dp->pipeline, (struct ofl_msg_flow_mod *)msg, sender);
         }
-	case OFPT_STATE_MOD: {
-    	   // printf("here is state mod control msg type\n");
+	    case OFPT_STATE_MOD: {
             return pipeline_handle_state_mod(dp->pipeline, (struct ofl_msg_state_mod *)msg, sender);
-	}
+	    }
+        case OFPT_FLAG_MOD: {
+            return pipeline_handle_flag_mod(dp->pipeline, (struct ofl_msg_flag_mod *)msg, sender);
+        }
         case OFPT_GROUP_MOD: {
             return group_table_handle_group_mod(dp->groups, (struct ofl_msg_group_mod *)msg, sender);
         }

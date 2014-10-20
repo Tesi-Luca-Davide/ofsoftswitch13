@@ -18,8 +18,8 @@ struct key_extractor {
 struct state_entry {
     struct hmap_node 			hmap_node;
     uint8_t				key[MAX_STATE_KEY_LEN];
-    //uint32_t				state;
-    uint64_t 				state;
+    uint32_t				state;
+    //uint64_t 				state;
 };
 
 struct state_table {

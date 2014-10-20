@@ -35,11 +35,12 @@
 #define OFP_VERSION   0x04
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
-#define OFP_TCP_PORT  6633
-#define OFP_SSL_PORT  6633
+#define OFP_TCP_PORT  6653
+#define OFP_SSL_PORT  6653
 #define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
 /* Number of tables in the pipeline */
 #define PIPELINE_TABLES 64
+#define OFP_GLOBAL_STATES_DEFAULT 0
 
 /* Header on all OpenFlow packets. */
 struct ofp_header {
@@ -94,8 +95,25 @@ enum ofp_type {
     /* Meters and rate limiters configuration messages. */
     OFPT_METER_MOD = 29, /* Controller/switch message */
 	OFPT_STATE_MOD = 30, /* Controller/switch message */
+    OFPT_FLAG_MOD = 31,  /* Controller/switch message */
 };
 
+/*
+    OFPT_FLAG_MOD
+*/
+
+struct ofp_flag_mod {
+    struct ofp_header header;
+    uint32_t flag;
+    uint32_t flag_mask;
+    uint8_t command;
+    uint8_t pad[7];                  /* Pad to 64 bits. */
+};
+
+enum ofp_flag_mod_command { 
+    OFPSC_MODIFY_FLAGS = 0,
+    OFPSC_RESET_FLAGS
+};
 /*
 	OFPT_STATE_MOD
 */
@@ -364,7 +382,9 @@ enum oxm_ofb_match_fields {
     OFPXMT_OFB_MPLS_BOS = 36,       /* MPLS BoS bit. */
     OFPXMT_OFB_PBB_ISID = 37,       /* PBB I-SID. */
     OFPXMT_OFB_TUNNEL_ID = 38,      /* Logical Port Metadata. */
-    OFPXMT_OFB_IPV6_EXTHDR = 39     /* IPv6 Extension Header pseudo-field */
+    OFPXMT_OFB_IPV6_EXTHDR = 39,     /* IPv6 Extension Header pseudo-field */
+    OFPXMT_OFB_FLAGS = 40,        /* Global States */
+    OFPXMT_OFB_STATE = 41,        /* Flow State */
 };
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
@@ -490,6 +510,7 @@ enum ofp_action_type {
     OFPAT_POP_PBB = 27,      /* Pop the outer PBB service tag (I-TAG) */
     OFPAT_SET_STATE = 28,   /* Write the next state field for use later in
                                 pipeline */
+    OFPAT_SET_FLAG = 29,   /* Set a single flag value of the global state */
     OFPAT_EXPERIMENTER = 0xffff
 };
 
@@ -606,6 +627,16 @@ struct ofp_action_set_state {
     //uint8_t pad[3];           /* Align to 64-bits. */
 };
 OFP_ASSERT(sizeof(struct ofp_action_set_state) == 16);
+
+/* Action structure for OFPAT_SET_FLAG */
+struct ofp_action_set_flag {
+    uint16_t type; /* OFPAT_SET_FLAG */
+    uint16_t len;  /* Length is 8. */
+    uint32_t value; /* flag value */
+    uint32_t mask;    /*flag mask*/
+    uint8_t pad[4];   /* Align to 64-bits. */
+};
+OFP_ASSERT(sizeof(struct ofp_action_set_flag) == 16);
 /*************Controller-to-Switch Messages******************/
 
 /* Switch features. */
@@ -633,7 +664,7 @@ enum ofp_capabilities {
     OFPC_IP_REASM = 1 << 5,    /* Can reassemble IP fragments. */
     OFPC_QUEUE_STATS = 1 << 6, /* Queue statistics. */
     OFPC_PORT_BLOCKED = 1 << 8, /* Switch will block looping ports. */
-    OFPC_TABLE_STATEFULL = 1 << 9  /* support stateful feature */
+    OFPC_OPENSTATE = 1 << 9,  /* support OpenState feature */
 };
 
 /* Switch configuration. */

@@ -97,6 +97,10 @@ pipeline_handle_stats_request_aggregate(struct pipeline *pl,
                                   struct ofl_msg_multipart_request_flow *msg,
                                   const struct sender *sender);
 
+/* Handles a flag_mod message */
+ofl_err
+pipeline_handle_flag_mod(struct pipeline *pl, struct ofl_msg_flag_mod *msg,
+                                                const struct sender *sender);
 
 /* Handles a state_mod message */
 ofl_err
@@ -111,5 +115,7 @@ pipeline_timeout(struct pipeline *pl);
 void
 pipeline_destroy(struct pipeline *pl);
 
+void
+pipeline_global_states_write_flags(struct packet *pkt);
 
 #endif /* PIPELINE_H */

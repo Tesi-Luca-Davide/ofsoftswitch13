@@ -75,6 +75,8 @@ struct datapath {
 
     uint64_t  id;               /* Unique identifier for this datapath. */
 
+    uint32_t  global_states;    /* Global States for this datapath. */
+
     struct list remotes;        /* Remote connections. */
 
     uint64_t generation_id;     /* Identifies a given mastership view */
@@ -146,6 +148,10 @@ struct remote {
     uint32_t role; /*OpenFlow controller role.*/
     struct ofl_async_config config;  /* Asynchronous messages configuration, 
                                             set from controller*/
+
+    /* Multipart request message pending reassembly. */
+    struct ofl_msg_multipart_request_header *mp_req_msg; /* Message. */
+    uint32_t mp_req_xid;     /* Multipart request OpenFlow transaction ID. */
 };
 
 /* Creates a new datapath */

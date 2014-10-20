@@ -41,6 +41,45 @@
 #include "openflow/openflow.h"
 
 
+char *decimal_to_binary(int n)
+{
+   int c, d, count;
+   char *pointer;
+ 
+   count = 0;
+   pointer = (char*)malloc(32+1);
+ 
+   if ( pointer == NULL )
+      exit(EXIT_FAILURE);
+   for ( c = 31 ; c >= 0 ; c-- )
+   {
+      d = n >> c;
+      if ( d & 1 )
+         *(pointer+count) = 1 + '0';
+      else
+         *(pointer+count) = 0 + '0';
+      count++;
+   }
+   *(pointer+count) = '\0';
+ 
+   return  pointer;
+}
+
+void masked_value_print(FILE *stream,char *value, char *mask){
+    int i=0;
+
+    for(i=0;i<32;i++){
+
+        if (mask[i]=='0'){
+            fprintf(stream,"*");
+        }
+        else {
+            fprintf(stream,"%c",*(value+i));
+        }
+    }
+}
+
+
 char *
 ofl_port_to_string(uint32_t port) {
     char *str;
@@ -212,6 +251,7 @@ ofl_action_type_print(FILE *stream, uint16_t type) {
             case OFPAT_DEC_NW_TTL: {     fprintf(stream, "\x1B[36mnw_dec\x1B[0m"); return; }
             case OFPAT_EXPERIMENTER: {   fprintf(stream, "\x1B[36mexp\x1B[0m"); return; }
             case OFPAT_SET_STATE: {      fprintf(stream, "\x1B[36mset_state\x1B[0m"); return; }
+            case OFPAT_SET_FLAG: {       fprintf(stream, "\x1B[36mset_flag\x1B[0m"); return; }
             default: {                   fprintf(stream, "?(%u)", type); return; }
         }
     }
@@ -235,6 +275,7 @@ ofl_action_type_print(FILE *stream, uint16_t type) {
             case OFPAT_DEC_NW_TTL: {     fprintf(stream, "nw_dec"); return; }
             case OFPAT_EXPERIMENTER: {   fprintf(stream, "exp"); return; }
             case OFPAT_SET_STATE: {      fprintf(stream, "set_state"); return; }
+            case OFPAT_SET_FLAG: {       fprintf(stream, "set_flag"); return; }
             default: {                   fprintf(stream, "?(%u)", type); return; }
         }
     }
@@ -257,6 +298,8 @@ ofl_oxm_type_print(FILE *stream, uint32_t type){
     case OXM_OF_IN_PORT:            {fprintf(stream, "in_port"); return; }
     case OXM_OF_IN_PHY_PORT:        {fprintf(stream, "in_phy_port"); return; }
     case OXM_OF_METADATA:           {fprintf(stream, "metadata"); return; }
+    case OXM_OF_FLAGS:              {fprintf(stream, "flags"); return; }
+    case OXM_OF_STATE:              {fprintf(stream, "state"); return; }
     case OXM_OF_ETH_DST:            {fprintf(stream, "eth_dst"); return; }
     case OXM_OF_ETH_SRC:            {fprintf(stream, "eth_src"); return; }
     case OXM_OF_ETH_TYPE:           {fprintf(stream, "eth_type"); return; }
@@ -392,6 +435,7 @@ ofl_error_type_print(FILE *stream, uint16_t type) {
         case (OFPET_METER_MOD_FAILED): {     fprintf(stream, "METER_MOD_FAILED"); return; }
         case (OFPET_QUEUE_OP_FAILED): {      fprintf(stream, "QUEUE_OP_FAILED"); return; }
         case (OFPET_SWITCH_CONFIG_FAILED): { fprintf(stream, "SWITCH_CONFIG_FAILED"); return; }
+        case (OFPET_TABLE_FEATURES_FAILED): { fprintf(stream, "TABLE_FEATURES_FAILED"); return; }
         default: {                           fprintf(stream, "?(%u)", type); return; }
     }
 }
@@ -547,6 +591,17 @@ ofl_error_code_print(FILE *stream, uint16_t type, uint16_t code) {
             switch (code) {
                 case (OFPSCFC_BAD_FLAGS) : { fprintf(stream, "BAD_FLAGS"); return; }
                 case (OFPSCFC_BAD_LEN) :   { fprintf(stream, "BAD_LEN"); return; }
+            }
+            break;
+        }
+        case (OFPET_TABLE_FEATURES_FAILED): {
+            switch (code) {
+                case (OFPTFFC_BAD_TABLE) : { fprintf(stream, "BAD_TABLE"); return; }
+                case (OFPTFFC_BAD_METADATA) :   { fprintf(stream, "BAD_METADATA"); return; }
+                case (OFPTFFC_BAD_TYPE) :   { fprintf(stream, "BAD_TYPE"); return; }
+                case (OFPTFFC_BAD_LEN) :   { fprintf(stream, "BAD_LEN"); return; }
+                case (OFPTFFC_BAD_ARGUMENT) :   { fprintf(stream, "BAD_ARGUMENT"); return; }
+                case (OFPTFFC_EPERM) :   { fprintf(stream, "EPERM"); return; }
             }
             break;
         }

@@ -131,6 +131,8 @@ dp_new(void) {
 
     dp->id = gen_datapath_id();
 
+    dp->global_states = NULL;
+
     dp->generation_id = -1;
 
     dp->last_timeout = time_now();
@@ -261,7 +263,7 @@ remote_run(struct datapath *dp, struct remote *r)
 
 static void
 remote_rconn_run(struct datapath *dp, struct remote *r, uint8_t conn_id) {
-    struct rconn *rconn;
+    struct rconn *rconn = NULL;
     ofl_err error;
     size_t i;
    // printf("here is remot rconn run is called\n");
@@ -356,6 +358,9 @@ remote_destroy(struct remote *r)
             rconn_destroy(r->rconn_aux);
         }
         rconn_destroy(r->rconn);
+	if(r->mp_req_msg != NULL) {
+	  ofl_msg_free((struct ofl_msg_header *) r->mp_req_msg, NULL);
+	}
         free(r);
     }
 }
@@ -370,6 +375,8 @@ remote_create(struct datapath *dp, struct rconn *rconn, struct rconn *rconn_aux)
     remote->rconn_aux = rconn_aux;
     remote->cb_dump = NULL;
     remote->n_txq = 0;
+    remote->mp_req_msg = NULL;
+    remote->mp_req_xid = 0;  /* Currently not needed. Jean II. */
     remote->role = OFPCR_ROLE_EQUAL;
     /* Set the remote configuration to receive any asynchronous message*/
     for(i = 0; i < 2; i++){

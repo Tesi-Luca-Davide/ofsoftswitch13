@@ -224,6 +224,13 @@
 #define OXM_OF_IPV6_EXTHDR  OXM_HEADER      (0x8000, 39, 2)
 #define OXM_OF_IPV6_EXTHDR_W  OXM_HEADER_W  (0x8000, 39, 2)
 
+/* Global States */
+#define OXM_OF_FLAGS OXM_HEADER     (0x8000, 40, 4)
+#define OXM_OF_FLAGS_W OXM_HEADER_W (0x8000, 40, 4)
+
+/* Flow State */
+#define OXM_OF_STATE OXM_HEADER     (0x8000, 41, 4)
+
 /* ## ------------------------------- ## */
 /* ## IPv6 compatible fields. ## */
 /* ## ------------------------------- ## */
@@ -284,7 +291,7 @@ enum oxm_field_index {
 #define DEFINE_FIELD(HEADER,DL_TYPES, NW_PROTO, MASKABLE) \
         OFI_OXM_##HEADER,
 #include "oxm-match.def"
-    NUM_OXM_FIELDS = 56
+    NUM_OXM_FIELDS = 59
 };
 
 struct oxm_field {
@@ -298,6 +305,24 @@ struct oxm_field {
 
 /* All the known fields. */
 extern struct oxm_field all_fields[NUM_OXM_FIELDS];
+
+bool 
+check_bad_wildcard(uint8_t value, uint8_t mask);
+
+bool 
+check_bad_wildcard16(uint16_t value, uint16_t mask);
+
+bool 
+check_bad_wildcard32(uint32_t value, uint32_t mask);
+
+bool 
+check_bad_wildcard48(uint8_t *value, uint8_t *mask);
+
+bool 
+check_bad_wildcard64(uint64_t value, uint64_t mask);
+
+bool 
+check_bad_wildcard128(uint8_t *value, uint8_t *mask);
 
 struct oxm_field *
 oxm_field_lookup(uint32_t header);

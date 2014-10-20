@@ -443,7 +443,7 @@ ofl_msg_unpack_flow_mod(struct ofp_header *src,uint8_t* buf, size_t *len, struct
 
     if (sm->table_id >= PIPELINE_TABLES && ((sm->command != OFPFC_DELETE
     || sm->command != OFPFC_DELETE_STRICT) && sm->table_id != OFPTT_ALL)) {
-        OFL_LOG_WARN(LOG_MODULE, "Received FLOW_MOD message has invalid table id (%zu).", sm->table_id );
+        OFL_LOG_WARN(LOG_MODULE, "Received FLOW_MOD message has invalid table id (%d).", sm->table_id );
         return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_TABLE_ID);
     } 
 
@@ -677,7 +677,7 @@ ofl_msg_unpack_table_mod(struct ofp_header *src, size_t *len, struct ofl_msg_hea
     sm = (struct ofp_table_mod *)src;
     dm = (struct ofl_msg_table_mod *)malloc(sizeof(struct ofl_msg_table_mod));
     if (sm->table_id >= PIPELINE_TABLES) {
-        OFL_LOG_WARN(LOG_MODULE, "Received TABLE_MOD message has invalid table id (%zu).", sm->table_id );
+        OFL_LOG_WARN(LOG_MODULE, "Received TABLE_MOD message has invalid table id (%d).", sm->table_id );
         return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_TABLE_ID);
     }
 
@@ -707,7 +707,7 @@ ofl_msg_unpack_multipart_request_flow(struct ofp_multipart_request *os, uint8_t*
     dm = (struct ofl_msg_multipart_request_flow *) malloc(sizeof(struct ofl_msg_multipart_request_flow));
 
     if (sm->table_id != OFPTT_ALL && sm->table_id >= PIPELINE_TABLES) {
-         OFL_LOG_WARN(LOG_MODULE, "Received MULTIPART REQUEST FLOW message has invalid table id (%zu).", sm->table_id );
+         OFL_LOG_WARN(LOG_MODULE, "Received MULTIPART REQUEST FLOW message has invalid table id (%d).", sm->table_id );
          return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_TABLE_ID);
     }
 
@@ -792,6 +792,12 @@ ofl_msg_unpack_multipart_request_table_features(struct ofp_multipart_request *os
 
     for(i = 0; i < dm->tables_num; i++){
         error = ofl_structs_table_features_unpack((struct ofp_table_features*) features, len, &dm->table_features[i] , exp);
+        if (error) {
+            OFL_UTILS_FREE_ARR_FUN2(dm->table_features, i,
+                                    ofl_structs_free_table_features, exp);
+            free(dm);
+            return error;
+        }
         features += ntohs(((struct ofp_table_features*) features)->length); 
     }   
     *msg = (struct ofl_msg_header *)dm;
@@ -1260,6 +1266,12 @@ ofl_msg_unpack_multipart_reply_table_features(struct ofp_multipart_reply *src, s
 
     for(i = 0; i < dm->tables_num; i++){
         error = ofl_structs_table_features_unpack((struct ofp_table_features*) features, len, &dm->table_features[i] , exp);
+        if (error) {
+            OFL_UTILS_FREE_ARR_FUN2(dm->table_features, i,
+                                    ofl_structs_free_table_features, exp);
+            free(dm);
+            return error;
+        }
         features += ntohs(((struct ofp_table_features*) features)->length); 
     }   
     *msg = (struct ofl_msg_header *)dm;
@@ -1584,6 +1596,33 @@ ofl_structs_extraction_unpack(struct ofp_extraction *src, size_t *len, struct of
 }
 
 static ofl_err
+ofl_structs_key_unpack(struct ofp_state_entry *src, size_t *len, struct ofl_msg_state_entry *dst) {
+    int error=0;
+    int i;
+    uint8_t key[OFPSC_MAX_KEY_LEN] = {0};
+
+    if(*len < (2*sizeof(uint32_t) + ntohl(src->key_len)*sizeof(uint8_t)))
+    { //control of struct ofp_extraction length.
+       OFL_LOG_WARN(LOG_MODULE, "Received state mod is too short (%zu).", *len);
+       return ofl_error(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+    }
+    dst->key_len=ntohl(src->key_len);
+    dst->state=ntohl(src->state);
+    for (i=0;i<dst->key_len;i++)
+    {
+        key[i]=src->key[i];
+        printf("fields array %02x \n.", dst->key[i]);
+    }
+    memcpy(dst->key, key, OFPSC_MAX_KEY_LEN);
+    OFL_LOG_WARN(LOG_MODULE, "key count is %d\n",dst->key_len);
+    OFL_LOG_WARN(LOG_MODULE, "state is %d\n",dst->state);   
+
+    *len -= (2*sizeof(uint32_t) + ntohl(src->key_len)*sizeof(uint8_t));
+ 
+    return 0;
+}
+
+static ofl_err
 ofl_msg_unpack_state_mod(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg) {
     struct ofp_state_mod *sm;
     struct ofl_msg_state_mod *dm;
@@ -1610,11 +1649,17 @@ ofl_msg_unpack_state_mod(struct ofp_header *src, size_t *len, struct ofl_msg_hea
     dm->table_id = sm->table_id;
     dm->command = (enum ofp_state_mod_command)sm->command;
     
-    *len -= sizeof(dm->cookie) - sizeof(dm->cookie_mask) - sizeof(dm->table_id) - sizeof(dm->command);
+    *len -= sizeof(dm->cookie) + sizeof(dm->cookie_mask) + sizeof(dm->table_id) + 1;
 
+    
     if (dm->command == OFPSC_ADD_FLOW_STATE || dm->command == OFPSC_DEL_FLOW_STATE){
-	state_entry_pos = sizeof(struct ofp_state_mod);
-	//XXX TODO XXX
+	//state_entry_pos = sizeof(struct ofp_state_mod);
+	error = ofl_structs_key_unpack(&(sm->payload[0]), len, &(dm->payload[0]));
+        if (error) {
+            free(dm);
+            return error;
+        }
+
     } 
 
     else if(dm->command ==OFPSC_SET_L_EXTRACTOR || dm->command == OFPSC_SET_U_EXTRACTOR){
@@ -1628,6 +1673,34 @@ ofl_msg_unpack_state_mod(struct ofp_header *src, size_t *len, struct ofl_msg_hea
     *msg = (struct ofl_msg_header *)dm;
     return 0;
 }
+
+static ofl_err
+ofl_msg_unpack_flag_mod(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg) {
+    struct ofp_flag_mod *sm;
+    struct ofl_msg_flag_mod *dm;
+    ofl_err error;
+    size_t i;
+   
+    
+    if (*len < sizeof(struct ofp_flag_mod)) {
+        OFL_LOG_WARN(LOG_MODULE, "Received FLAG_MOD message has invalid length (%zu).", *len);
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    sm = (struct ofp_flag_mod *)src;
+    dm = (struct ofl_msg_flag_mod *)malloc(sizeof(struct ofl_msg_flag_mod));
+    
+    *len -= sizeof(struct ofp_flag_mod);
+
+    dm->flag = ntohl(sm->flag);
+    dm->flag_mask = ntohl(sm->flag_mask);
+    dm->command = (enum ofp_flag_mod_command)sm->command;
+    
+    
+
+    *msg = (struct ofl_msg_header *)dm;
+    return 0;
+}
+
 
 ofl_err
 ofl_msg_unpack(uint8_t *buf, size_t buf_len, struct ofl_msg_header **msg, uint32_t *xid, struct ofl_exp *exp) {
@@ -1725,6 +1798,9 @@ ofl_msg_unpack(uint8_t *buf, size_t buf_len, struct ofl_msg_header **msg, uint32
             error = ofl_msg_unpack_state_mod(oh, &len, msg);
             break;
 	}
+        case OFPT_FLAG_MOD:
+            error = ofl_msg_unpack_flag_mod(oh, &len, msg);
+            break;
         case OFPT_GROUP_MOD:
             error = ofl_msg_unpack_group_mod(oh, &len, msg, exp);
             break;
@@ -1799,3 +1875,4 @@ ofl_msg_unpack(uint8_t *buf, size_t buf_len, struct ofl_msg_header **msg, uint32
    // printf ("msg unpack has been done\n");
     return 0;
 }
+

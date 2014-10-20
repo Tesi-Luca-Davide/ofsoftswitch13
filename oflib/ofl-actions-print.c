@@ -81,7 +81,6 @@ ofl_action_print(FILE *stream, struct ofl_action_header *act, struct ofl_exp *ex
             break;
         }
         case OFPAT_SET_FIELD:{
-            size_t size;
             struct ofl_action_set_field *a = (struct ofl_action_set_field *)act;
             fprintf(stream, "{field:");
             ofl_structs_oxm_tlv_print(stream, a->field);
@@ -163,6 +162,17 @@ ofl_action_print(FILE *stream, struct ofl_action_header *act, struct ofl_exp *ex
             fprintf(stream, "{state=\"%u\"", a->state);
             fprintf(stream, ",stage_id=\"%u\"", a->stage_id);
             fprintf(stream, ",bw_flag=\"%u\"}", a->bw_flag);
+
+            break;
+        }
+        case OFPAT_SET_FLAG: {
+            struct ofl_action_set_flag *a = (struct ofl_action_set_flag *)act;
+
+            fprintf(stream, "{flag=");
+            masked_value_print(stream,decimal_to_binary(a->value),decimal_to_binary(a->mask));
+            fprintf(stream, "}");
+            //fprintf(stream, "{flag=\"%u\"", a->value);
+            //fprintf(stream, ",flag_mask=\"%u\"}", a->mask);
 
             break;
         }
