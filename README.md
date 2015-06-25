@@ -1,6 +1,7 @@
 # OpenState
 
-This is an implementation of the OpenState switch based on the OpenFlow 1.3 softswitch developed by CPdQ and available at https://github.com/CPqD/ofsoftswitch13. For any information about OpenState please check the home page of the project at http://openstate-sdn.github.io/.
+
+This is an implementation of the OpenState switch based on the OpenFlow 1.3 softswitch developed by CPdQ and available at https://github.com/CPqD/ofsoftswitch13. For any information about OpenState please check the home page of the project at http://www.openstate-sdn.org/.
 
 
 # OpenFlow 1.3 Software Switch
@@ -17,7 +18,10 @@ The following components are available in this package:
 
 # Getting Started
 
-These instructions have been tested on Ubuntu 12.04. Other distributions or versions may need different steps.
+These instructions have been tested on Ubuntu 12.04. Other distributions or versions may need different steps. 
+
+For Ubuntu 14.04, please check @castroflavio solution:
+[How to compile on Ubuntu 14.04][compileubuntu14]
 
 ## Before building
 The switch makes use of the NetBee library to parse packets, so we need to install it first.
@@ -34,6 +38,14 @@ The switch makes use of the NetBee library to parse packets, so we need to insta
     $ wget http://www.nbee.org/download/nbeesrc-jan-10-2013.zip
     $ unzip nbeesrc-jan-10-2013.zip
     $ cd nbeesrc-jan-10-2013
+    ```
+2.1 If you're running Ubuntu 14.04, before compiling and installing NetBee you need to downgrade the version of bison shipping with your version of Ubuntu:
+
+    ```
+    $ wget -nc http://de.archive.ubuntu.com/ubuntu/pool/main/b/bison/bison_2.5.dfsg-2.1_amd64.deb \
+        http://de.archive.ubuntu.com/ubuntu/pool/main/b/bison/libbison-dev_2.5.dfsg-2.1_amd64.deb
+    $ sudo dpkg -i bison_2.5.dfsg-2.1_amd64.deb libbison-dev_2.5.dfsg-2.1_amd64.deb
+    $ rm bison_2.5.dfsg-2.1_amd64.deb libbison-dev_2.5.dfsg-2.1_amd64.deb
     ```
 
 3. Create the build system
@@ -68,7 +80,7 @@ The switch makes use of the NetBee library to parse packets, so we need to insta
     ```
 
 ## Building
-Run the following commands in the `of13softswitch` directory to build and install everything:
+Run the following commands in the `ofsoftswitch13` directory to build and install everything:
 
     $ ./boot.sh
     $ ./configure
@@ -166,3 +178,4 @@ E-mail: Eder Leao Fernandes (ederleaofernandes at gmail . com)
 
 [ofp13]: https://www.opennetworking.org/images/stories/downloads/specification/openflow-spec-v1.3.0.pdf
 [ericssonsw11]: https://github.com/TrafficLab/of11softswitch
+[compileubuntu14]: http://tocai.dia.uniroma3.it/compunet-wiki/index.php/Installing_and_setting_up_OpenFlow_tools

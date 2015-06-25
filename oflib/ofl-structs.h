@@ -154,6 +154,7 @@ struct ofl_flow_stats {
     uint16_t                        idle_timeout;  /* Number of seconds idle before
                                                      expiration. */
     uint16_t                        hard_timeout;  /* Number of seconds before expiration. */
+    uint16_t                        flags;         /* One of OFPFF_*/ 
     uint64_t                        cookie;        /* Opaque controller-issued identifier. */
     uint64_t                        packet_count;  /* Number of packets in flow. */
     uint64_t                        byte_count;    /* Number of bytes in flow. */
@@ -431,6 +432,12 @@ ofl_structs_match_put64(struct ofl_match *match, uint32_t header, uint64_t value
 
 void
 ofl_structs_match_put64m(struct ofl_match *match, uint32_t header, uint64_t value, uint64_t mask);
+
+void
+ofl_structs_match_put_pbb_isid(struct ofl_match *match, uint32_t header, uint8_t value[PBB_ISID_LEN]);
+
+void
+ofl_structs_match_put_pbb_isidm(struct ofl_match *match, uint32_t header, uint8_t value[PBB_ISID_LEN], uint8_t mask[PBB_ISID_LEN]);
 
 void
 ofl_structs_match_put_eth(struct ofl_match *match, uint32_t header, uint8_t value[ETH_ADDR_LEN]);

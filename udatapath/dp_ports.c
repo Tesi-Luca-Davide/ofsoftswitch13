@@ -565,7 +565,7 @@ dp_ports_lookup_queue(struct sw_port *p, uint32_t queue_id)
 {
     struct sw_queue *q;
 
-    if (queue_id <= p->max_queues) {
+    if (queue_id < p->max_queues) {
         q = &(p->queues[queue_id]);
 
         if (q->port != NULL) {
@@ -709,7 +709,7 @@ dp_ports_handle_port_mod(struct datapath *dp, struct ofl_msg_port_mod *msg,
 static void
 dp_port_stats_update(struct sw_port *port) {
     port->stats->duration_sec  =  (time_msec() - port->created) / 1000;
-    port->stats->duration_nsec = ((time_msec() - port->created) % 1000) * 1000;
+    port->stats->duration_nsec = ((time_msec() - port->created) % 1000) * 1000000;
 }
 
 void
@@ -801,7 +801,7 @@ dp_ports_handle_port_desc_request(struct datapath *dp,
 static void
 dp_ports_queue_update(struct sw_queue *queue) {
     queue->stats->duration_sec  =  (time_msec() - queue->created) / 1000;
-    queue->stats->duration_nsec = ((time_msec() - queue->created) % 1000) * 1000;
+    queue->stats->duration_nsec = ((time_msec() - queue->created) % 1000) * 1000000;
 }
 
 ofl_err
@@ -998,7 +998,7 @@ static int
 port_add_queue(struct sw_port *p, uint32_t queue_id,
                struct ofl_queue_prop_min_rate * mr)
 {
-    if (queue_id > p->max_queues) {
+    if (queue_id >= p->max_queues) {
         return EXFULL;
     }
 
